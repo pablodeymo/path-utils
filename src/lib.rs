@@ -1,48 +1,34 @@
-use std::error::Error;
-use std::fmt;
+use anyhow::*;
 
-#[derive(Debug)]
-pub struct MyError {
-    pub msg: String,
-}
-
-impl fmt::Display for MyError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "There is an error")
-    }
-}
-
-impl Error for MyError {}
-
-pub fn path_of_executable() -> Result<String, Box<dyn Error>> {
+pub fn path_of_executable() -> Result<String> {
     let exe_path = std::env::current_exe()?;
     let exe_path_str = format!("{}", exe_path.display());
     let pos = match exe_path_str.rfind('/') {
         Some(valor) => valor,
-        None => return Result::Err(Box::new(MyError{msg: "El directorio no contiene /".to_owned()}))
+        None => return Err(anyhow!("El directorio no contiene /"))
     };
 
     let ret = match exe_path_str.get(0..pos) {
         Some(valor) => valor,
-        None => return Result::Err(Box::new(MyError{msg: "Pos invalida".to_owned()}))
+        None => return Err(anyhow!("Pos invalida"))
     };
     Ok(ret.to_string())
 }
 
-pub fn get_first_filename_of_directory_with_extension(dir_name: &str, extension: &str) -> Result<String, Box<dyn Error>> {
+pub fn get_first_filename_of_directory_with_extension(dir_name: &str, extension: &str) -> Result<String> {
     let dir = std::path::Path::new(&dir_name);
     if dir.is_dir() {
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
             if let Some(path) = path.to_str() {
-                if path.ends_with(&format!(".{}", extension)) || 
+                if path.ends_with(&format!(".{}", extension)) ||
                    path.ends_with(&format!(".{}\"", extension)) {
-                    return Ok(path.to_string());    
+                    return Ok(path.to_string());
                 }
             }
         }
     }
-    Result::Err(String::from("File not found").into())
+    Err(anyhow!("File not found"))
 }
 
 pub fn run_command_in_docker(internal_command: &str, container_name: &str,
@@ -55,7 +41,7 @@ pub fn run_command_in_docker(internal_command: &str, container_name: &str,
     if let Some(network_name) = network_name {
         command.arg("--network")
         .arg(network_name);
-    }                    
+    }
     if let Some(workdir) = workdir {
         command.arg("--workdir")
         .arg(workdir);
@@ -75,6 +61,8 @@ pub fn run_command_in_docker(internal_command: &str, container_name: &str,
     }
     command.arg("-c")
         .arg(internal_command);
+
+    println!("{:?}", command);
     let execution = command.output().expect("failed to execute process");
     String::from_utf8_lossy(&execution.stdout).to_string()
 }
