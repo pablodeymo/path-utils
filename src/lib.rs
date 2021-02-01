@@ -21,6 +21,18 @@ pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
     Path::new(filename).extension().and_then(OsStr::to_str)
 }
 
+/// Gets the name of the file, without the extension
+pub fn get_stem_from_filename(filename: &str) -> Option<&str> {
+    Path::new(filename).file_stem().and_then(OsStr::to_str)
+}
+
+/// Converts the filename extension to lowercase
+pub fn convert_filename_extension_to_lowercase(filename: &str) -> Option<String> {
+    let extension = get_extension_from_filename(filename)?;
+    let stem = get_stem_from_filename(filename)?;
+    Some(format!("{}.{}", stem, extension.to_lowercase()))
+}
+
 pub fn get_first_filename_of_directory_with_extension(
     dir_name: &str,
     extension: &str,
@@ -85,5 +97,22 @@ mod tests {
     #[test]
     fn test_get_extension_from_filename() {
         assert_eq!(get_extension_from_filename("abc.gz"), Some("gz"));
+    }
+
+    #[test]
+    fn test_get_stem_from_filename() {
+        assert_eq!(get_stem_from_filename("abc.gz"), Some("abc"));
+    }
+
+    #[test]
+    fn test_convert_to_extension_lowercase() {
+        assert_eq!(
+            convert_filename_extension_to_lowercase("TEST.XLSX"),
+            Some("TEST.xlsx".to_string())
+        );
+        assert_eq!(
+            convert_filename_extension_to_lowercase("TEST.N.XLSX"),
+            Some("TEST.N.xlsx".to_string())
+        );
     }
 }
