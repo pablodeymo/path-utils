@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
 use std::path::Path;
 
