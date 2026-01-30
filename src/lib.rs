@@ -4,17 +4,11 @@ use std::path::Path;
 
 pub fn path_of_executable() -> Result<String> {
     let exe_path = std::env::current_exe()?;
-    let exe_path_str = format!("{}", exe_path.display());
-    let pos = match exe_path_str.rfind('/') {
-        Some(valor) => valor,
-        None => return Err(anyhow!("El directorio no contiene /")),
-    };
-
-    let ret = match exe_path_str.get(0..pos) {
-        Some(valor) => valor,
-        None => return Err(anyhow!("Pos invalida")),
-    };
-    Ok(ret.to_string())
+    exe_path
+        .parent()
+        .and_then(|p| p.to_str())
+        .map(|s| s.to_string())
+        .ok_or_else(|| anyhow!("Cannot get parent directory"))
 }
 
 pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
@@ -33,6 +27,12 @@ pub fn convert_filename_extension_to_lowercase(filename: &str) -> Option<String>
     Some(format!("{}.{}", stem, extension.to_lowercase()))
 }
 
+/// Returns the full path of the first file found in `dir_name` with the given `extension`.
+///
+/// # Note on trailing quote handling
+/// This function also matches files with a trailing double-quote character after the extension
+/// (e.g., `file.txt"`). This handles edge cases where filenames may contain an erroneous
+/// trailing quote from external systems or malformed input data.
 pub fn get_first_filename_of_directory_with_extension(
     dir_name: &str,
     extension: &str,
@@ -41,11 +41,11 @@ pub fn get_first_filename_of_directory_with_extension(
     if dir.is_dir() {
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
-            if let Some(path) = path.to_str() {
-                if path.ends_with(&format!(".{}", extension))
-                    || path.ends_with(&format!(".{}\"", extension))
-                {
-                    return Ok(path.to_string());
+            if let Some(file_ext) = get_extension_from_filename(path.to_str().unwrap_or("")) {
+                // Also check for trailing quote to handle malformed filenames from external sources
+                let ext_with_quote = format!("{}\"", extension);
+                if file_ext == extension || file_ext == ext_with_quote {
+                    return Ok(path.to_string_lossy().to_string());
                 }
             }
         }
@@ -53,6 +53,10 @@ pub fn get_first_filename_of_directory_with_extension(
     Err(anyhow!("File not found"))
 }
 
+/// Runs a command inside a Docker container.
+///
+/// Returns the stdout output on success. If the command fails (non-zero exit code),
+/// returns an error containing the stderr output.
 pub fn run_command_in_docker(
     internal_command: &str,
     container_name: &str,
@@ -61,7 +65,7 @@ pub fn run_command_in_docker(
     mount_dir: Option<&str>,
     entrypoint: Option<&str>,
     include_su: bool,
-) -> String {
+) -> Result<String> {
     use std::process::Command;
     let mut command = Command::new("/usr/bin/docker");
 
@@ -85,9 +89,17 @@ pub fn run_command_in_docker(
     }
     command.arg("-c").arg(internal_command);
 
-    println!("{:?}", command);
-    let execution = command.output().expect("failed to execute process");
-    String::from_utf8_lossy(&execution.stdout).to_string()
+    let output = command.output()?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(anyhow!(
+            "Docker command failed with exit code {}: {}",
+            output.status.code().unwrap_or(-1),
+            stderr
+        ))
+    }
 }
 
 #[cfg(test)]
