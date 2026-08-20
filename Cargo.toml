@@ -8,3 +8,11 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+
+[lints.clippy]
+manual_let_else = "deny"
+must_use_candidate = "deny"
+uninlined_format_args = "deny"
+missing_panics_doc = "deny"
+
+missing_errors_doc = "deny"

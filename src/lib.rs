@@ -2,18 +2,22 @@ use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
 use std::path::Path;
 
+/// Gets the directory path of the current executable
+///
+/// # Errors
+///
+/// Returns an error if the current executable path cannot be determined,
+/// or if the path does not contain a `/` separator.
 pub fn path_of_executable() -> Result<String> {
     let exe_path = std::env::current_exe()?;
     let exe_path_str = format!("{}", exe_path.display());
-    let pos = match exe_path_str.rfind('/') {
-        Some(valor) => valor,
-        None => return Err(anyhow!("El directorio no contiene /")),
-    };
+    let pos = exe_path_str
+        .rfind('/')
+        .ok_or_else(|| anyhow!("El directorio no contiene /"))?;
 
-    let ret = match exe_path_str.get(0..pos) {
-        Some(valor) => valor,
-        None => return Err(anyhow!("Pos invalida")),
-    };
+    let ret = exe_path_str
+        .get(0..pos)
+        .ok_or_else(|| anyhow!("Pos invalida"))?;
     Ok(ret.to_string())
 }
 
@@ -27,12 +31,19 @@ pub fn get_stem_from_filename(filename: &str) -> Option<&str> {
 }
 
 /// Converts the filename extension to lowercase
+#[must_use]
 pub fn convert_filename_extension_to_lowercase(filename: &str) -> Option<String> {
     let extension = get_extension_from_filename(filename)?;
     let stem = get_stem_from_filename(filename)?;
     Some(format!("{}.{}", stem, extension.to_lowercase()))
 }
 
+/// Gets the first filename of a directory matching the given extension
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be read, or if no file with
+/// the given extension is found.
 pub fn get_first_filename_of_directory_with_extension(
     dir_name: &str,
     extension: &str,
@@ -42,8 +53,8 @@ pub fn get_first_filename_of_directory_with_extension(
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
             if let Some(path) = path.to_str() {
-                if path.ends_with(&format!(".{}", extension))
-                    || path.ends_with(&format!(".{}\"", extension))
+                if path.ends_with(&format!(".{extension}"))
+                    || path.ends_with(&format!(".{extension}\""))
                 {
                     return Ok(path.to_string());
                 }
@@ -53,6 +64,11 @@ pub fn get_first_filename_of_directory_with_extension(
     Err(anyhow!("File not found"))
 }
 
+/// Runs a command inside a Docker container and returns its stdout
+///
+/// # Errors
+///
+/// Returns an error if the `docker` process cannot be executed.
 pub fn run_command_in_docker(
     internal_command: &str,
     container_name: &str,
@@ -61,7 +77,7 @@ pub fn run_command_in_docker(
     mount_dir: Option<&str>,
     entrypoint: Option<&str>,
     include_su: bool,
-) -> String {
+) -> Result<String> {
     use std::process::Command;
     let mut command = Command::new("/usr/bin/docker");
 
@@ -85,9 +101,9 @@ pub fn run_command_in_docker(
     }
     command.arg("-c").arg(internal_command);
 
-    println!("{:?}", command);
-    let execution = command.output().expect("failed to execute process");
-    String::from_utf8_lossy(&execution.stdout).to_string()
+    println!("{command:?}");
+    let execution = command.output()?;
+    Ok(String::from_utf8_lossy(&execution.stdout).to_string())
 }
 
 #[cfg(test)]
