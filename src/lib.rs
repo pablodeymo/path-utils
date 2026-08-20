@@ -50,15 +50,21 @@ pub fn get_first_filename_of_directory_with_extension(
     extension: &str,
 ) -> io::Result<String> {
     let dir = Path::new(&dir_name);
-    if dir.is_dir() {
-        for entry in std::fs::read_dir(dir)? {
-            let path = entry?.path();
-            if let Some(file_ext) = get_extension_from_filename(path.to_str().unwrap_or("")) {
-                // Also check for trailing quote to handle malformed filenames from external sources
-                let ext_with_quote = format!("{extension}\"");
-                if file_ext == extension || file_ext == ext_with_quote {
-                    return Ok(path.to_string_lossy().to_string());
-                }
+    if !dir.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Directory not found",
+        ));
+    }
+    for path in std::fs::read_dir(dir)?
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+    {
+        if let Some(file_ext) = get_extension_from_filename(path.to_str().unwrap_or("")) {
+            // Also check for trailing quote to handle malformed filenames from external sources
+            let ext_with_quote = format!("{extension}\"");
+            if file_ext == extension || file_ext == ext_with_quote {
+                return Ok(path.to_string_lossy().to_string());
             }
         }
     }
