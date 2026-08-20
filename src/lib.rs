@@ -26,12 +26,19 @@ pub fn get_stem_from_filename(filename: &str) -> Option<&str> {
     Path::new(filename).file_stem().and_then(OsStr::to_str)
 }
 
-/// Converts the filename extension to lowercase
+/// Converts the filename extension to lowercase, preserving the directory part of the path
 #[must_use]
 pub fn convert_filename_extension_to_lowercase(filename: &str) -> Option<String> {
-    let extension = get_extension_from_filename(filename)?;
-    let stem = get_stem_from_filename(filename)?;
-    Some(format!("{}.{}", stem, extension.to_lowercase()))
+    let path = Path::new(filename);
+    let extension = path.extension()?.to_str()?;
+    let stem = path.file_stem()?.to_str()?;
+    let lowercased = format!("{}.{}", stem, extension.to_lowercase());
+    Some(match path.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => {
+            parent.join(lowercased).to_string_lossy().to_string()
+        }
+        _ => lowercased,
+    })
 }
 
 /// Returns the full path of the first file found in `dir_name` with the given `extension`.
@@ -49,14 +56,7 @@ pub fn get_first_filename_of_directory_with_extension(
     dir_name: &str,
     extension: &str,
 ) -> io::Result<String> {
-    let dir = Path::new(&dir_name);
-    if !dir.is_dir() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "Directory not found",
-        ));
-    }
-    for path in std::fs::read_dir(dir)?
+    for path in std::fs::read_dir(dir_name)?
         .filter_map(Result::ok)
         .map(|entry| entry.path())
     {
@@ -74,6 +74,15 @@ pub fn get_first_filename_of_directory_with_extension(
 ///
 /// Returns the stdout output on success. If the command fails (non-zero exit code),
 /// returns an error containing the stderr output.
+///
+/// # Security
+///
+/// `internal_command` is executed by a shell inside the container (via `su -c` or
+/// the image's default entrypoint), so it must never contain untrusted input.
+/// Arguments are passed to `docker` without host shell interpretation, and `--`
+/// is used to stop docker's option parsing, but this does not protect against
+/// command injection *inside* the container. Be especially careful when
+/// `mount_dir` exposes host directories to the container.
 ///
 /// # Errors
 ///
@@ -105,7 +114,9 @@ pub fn run_command_in_docker(
         command.arg("-v").arg(mount_dir);
     }
 
-    command.arg(container_name);
+    // `--` terminates docker's option parsing, so a `container_name` or command
+    // argument starting with `-` cannot be interpreted as a docker flag
+    command.arg("--").arg(container_name);
     if include_su {
         command.arg("su");
     }
@@ -146,6 +157,10 @@ mod tests {
         assert_eq!(
             convert_filename_extension_to_lowercase("TEST.N.XLSX"),
             Some("TEST.N.xlsx".to_string())
+        );
+        assert_eq!(
+            convert_filename_extension_to_lowercase("some/dir/TEST.XLSX"),
+            Some("some/dir/TEST.xlsx".to_string())
         );
     }
 }
