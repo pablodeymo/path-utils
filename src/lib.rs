@@ -2,6 +2,12 @@ use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
 use std::path::Path;
 
+/// Gets the directory path of the current executable
+///
+/// # Errors
+///
+/// Returns an error if the current executable path cannot be determined,
+/// or if the path has no parent directory.
 pub fn path_of_executable() -> Result<String> {
     let exe_path = std::env::current_exe()?;
     exe_path
@@ -21,6 +27,7 @@ pub fn get_stem_from_filename(filename: &str) -> Option<&str> {
 }
 
 /// Converts the filename extension to lowercase
+#[must_use]
 pub fn convert_filename_extension_to_lowercase(filename: &str) -> Option<String> {
     let extension = get_extension_from_filename(filename)?;
     let stem = get_stem_from_filename(filename)?;
@@ -33,6 +40,11 @@ pub fn convert_filename_extension_to_lowercase(filename: &str) -> Option<String>
 /// This function also matches files with a trailing double-quote character after the extension
 /// (e.g., `file.txt"`). This handles edge cases where filenames may contain an erroneous
 /// trailing quote from external systems or malformed input data.
+///
+/// # Errors
+///
+/// Returns an error if the directory cannot be read, or if no file with
+/// the given extension is found.
 pub fn get_first_filename_of_directory_with_extension(
     dir_name: &str,
     extension: &str,
@@ -43,7 +55,7 @@ pub fn get_first_filename_of_directory_with_extension(
             let path = entry?.path();
             if let Some(file_ext) = get_extension_from_filename(path.to_str().unwrap_or("")) {
                 // Also check for trailing quote to handle malformed filenames from external sources
-                let ext_with_quote = format!("{}\"", extension);
+                let ext_with_quote = format!("{extension}\"");
                 if file_ext == extension || file_ext == ext_with_quote {
                     return Ok(path.to_string_lossy().to_string());
                 }
@@ -57,6 +69,11 @@ pub fn get_first_filename_of_directory_with_extension(
 ///
 /// Returns the stdout output on success. If the command fails (non-zero exit code),
 /// returns an error containing the stderr output.
+///
+/// # Errors
+///
+/// Returns an error if the `docker` process cannot be executed, or if the
+/// command exits with a non-zero status code.
 pub fn run_command_in_docker(
     internal_command: &str,
     container_name: &str,
