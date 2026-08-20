@@ -37,8 +37,8 @@ pub fn convert_filename_extension_to_lowercase(filename: &str) -> Option<String>
 /// Returns the full path of the first file found in `dir_name` with the given `extension`.
 ///
 /// # Note on trailing quote handling
-/// This function also matches files with a trailing double-quote character after the extension
-/// (e.g., `file.txt"`). This handles edge cases where filenames may contain an erroneous
+/// This function also matches files with trailing double-quote characters after the extension
+/// (e.g., `file.txt"` or `file.txt""`). This handles edge cases where filenames may contain an erroneous
 /// trailing quote from external systems or malformed input data.
 ///
 /// # Errors
@@ -60,12 +60,11 @@ pub fn get_first_filename_of_directory_with_extension(
         .filter_map(Result::ok)
         .map(|entry| entry.path())
     {
-        if let Some(file_ext) = get_extension_from_filename(path.to_str().unwrap_or("")) {
-            // Also check for trailing quote to handle malformed filenames from external sources
-            let ext_with_quote = format!("{extension}\"");
-            if file_ext == extension || file_ext == ext_with_quote {
-                return Ok(path.to_string_lossy().to_string());
-            }
+        // Ignore trailing quotes to handle malformed filenames from external sources
+        if let Some(file_ext) = get_extension_from_filename(path.to_str().unwrap_or(""))
+            && file_ext.trim_end_matches('"') == extension
+        {
+            return Ok(path.to_string_lossy().to_string());
         }
     }
     Err(io::Error::new(io::ErrorKind::NotFound, "File not found"))
