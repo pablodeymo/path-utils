@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Result};
 use std::ffi::OsStr;
+use std::io;
 use std::path::Path;
 
 /// Gets the directory path of the current executable
@@ -8,13 +8,13 @@ use std::path::Path;
 ///
 /// Returns an error if the current executable path cannot be determined,
 /// or if the path has no parent directory.
-pub fn path_of_executable() -> Result<String> {
+pub fn path_of_executable() -> io::Result<String> {
     let exe_path = std::env::current_exe()?;
     exe_path
         .parent()
         .and_then(|p| p.to_str())
         .map(|s| s.to_string())
-        .ok_or_else(|| anyhow!("Cannot get parent directory"))
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Cannot get parent directory"))
 }
 
 pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
@@ -48,7 +48,7 @@ pub fn convert_filename_extension_to_lowercase(filename: &str) -> Option<String>
 pub fn get_first_filename_of_directory_with_extension(
     dir_name: &str,
     extension: &str,
-) -> Result<String> {
+) -> io::Result<String> {
     let dir = Path::new(&dir_name);
     if dir.is_dir() {
         for entry in std::fs::read_dir(dir)? {
@@ -62,7 +62,7 @@ pub fn get_first_filename_of_directory_with_extension(
             }
         }
     }
-    Err(anyhow!("File not found"))
+    Err(io::Error::new(io::ErrorKind::NotFound, "File not found"))
 }
 
 /// Runs a command inside a Docker container.
@@ -82,7 +82,7 @@ pub fn run_command_in_docker(
     mount_dir: Option<&str>,
     entrypoint: Option<&str>,
     include_su: bool,
-) -> Result<String> {
+) -> io::Result<String> {
     use std::process::Command;
     let mut command = Command::new("/usr/bin/docker");
 
@@ -111,11 +111,10 @@ pub fn run_command_in_docker(
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(anyhow!(
-            "Docker command failed with exit code {}: {}",
-            output.status.code().unwrap_or(-1),
-            stderr
-        ))
+        Err(io::Error::other(format!(
+            "Docker command failed with exit code {}: {stderr}",
+            output.status.code().unwrap_or(-1)
+        )))
     }
 }
 
